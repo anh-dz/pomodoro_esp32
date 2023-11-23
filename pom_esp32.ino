@@ -133,6 +133,7 @@ void loop() {
         break;
       case 23 ... 24:
         display.print("PREPARE TO SLEEP!");
+        break;
       default:
         display.print("YOUR FUTURE\nIN YOUR HANDS!");
         break;

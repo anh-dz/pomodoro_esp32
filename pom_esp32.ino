@@ -78,13 +78,15 @@ pair<int, int> t;
 RtcDateTime now;
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
+char daysConvert[7][4] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
 
 pair<int, int> printDateTime(const RtcDateTime& dt) {
     char datestring[20];
 
     snprintf_P(datestring, 
             countof(datestring),
-            PSTR("%02u/%02u %02u:%02u %02u"),
+            PSTR("%s %02u/%02u %02u:%02u %02u"),
+            daysConvert[dt.DayOfWeek()],
             dt.Day(),
             dt.Month(),
             dt.Hour(),

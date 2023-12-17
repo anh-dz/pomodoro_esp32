@@ -3,7 +3,7 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <ThreeWire.h>  
+#include <ThreeWire.h>
 #include <RtcDS1302.h>
 // #include <BluetoothSerial.h>
 
@@ -63,6 +63,8 @@ unsigned int session = 0;
 
 bool isStart = false;
 bool counting = false;
+bool wasting = false;
+bool reminder_22 = true;
 /*
 state: w: work
        p: plan
@@ -100,6 +102,12 @@ pair<int, int> printDateTime(const RtcDateTime& dt) {
     return make_pair(dt.Hour(), dt.Minute());
 }
 
+void playBuzzer() {
+  tone(buzzerPin, 1140, 250);
+  delay(250*1.30);
+  noTone(buzzerPin);
+}
+
 void loop() {
   now = Rtc.GetDateTime();
 
@@ -109,37 +117,6 @@ void loop() {
   // if (SerialBT.available()) {
   //   Serial.write(SerialBT.read());
   // }
-
-  if(!counting && !isStart) {
-    display.clearDisplay();
-    t = printDateTime(now);
-    display.setTextSize(1);
-    display.setCursor(0, display.height()/2);
-    switch (t.first) {
-      case 0 ... 5:
-        display.clearDisplay();
-        break;
-      case 6 ... 8:
-        display.print("TIME TO\nGO TO SCHOOL!");
-        break;
-      case 12 ... 13:
-        display.print("SHORT BREAK!");
-        break;
-      case 17 ... 19:
-        display.print("WORK OUT\nPLAY PIANO");
-        break;
-      case 20 ... 22:
-        display.print("DID YOU STUDY?");
-        break;
-      case 23 ... 24:
-        display.print("PREPARE TO SLEEP!");
-        break;
-      default:
-        display.print("YOUR FUTURE\nIN YOUR HANDS!");
-        break;
-    }
-  }
-
   unsigned long currentMillis = millis();
   btnStartValue = digitalRead(btn_start);
   if (btnStartValue == LOW && currentMillis - previousMillis > 200) {
@@ -153,13 +130,26 @@ void loop() {
   }
 
   btnNextValue = digitalRead(btn_next);
-  if ((counting || isStart) && btnNextValue == LOW && currentMillis - previousMillis > debounceDelay) {
+  if (btnNextValue == LOW && currentMillis - previousMillis > 200) {
     previousMillis = currentMillis; // reset the debouncing timer
-    if (counting) {
-      counting = false;
-      start_pom();
+    if ((counting || isStart)) {
+      if (counting || wasting) {
+        counting = false;
+        wasting = false;
+        start_pom();
+      }
+      nextState();
+    } else {
+      if(wasting) {
+        wasting = false;
+        turn_off_led();
+      } else {
+        startMillis = millis()/1000; // Reset the start time
+        wasting = true;
+        counting = false;
+        turn_on_all_led();
+      }
     }
-    nextState();
   }
 
   btnCountValue = digitalRead(btn_co);
@@ -169,19 +159,67 @@ void loop() {
     if (counting) {
       counting = false;
     }else {
-      if(isStart)
+      if (isStart)
         isStart = false;
+      if (wasting)
+        wasting = false;
       counting = true; // Set counting flag
+    }
+  }
+
+  if(!counting && !wasting && !isStart) {
+    display.clearDisplay();
+    t = printDateTime(now);
+    display.setTextSize(1);
+    display.setCursor(0, 32/2);
+    switch (t.first) {
+      case 0 ... 5:
+        display.clearDisplay();
+        break;
+      case 6 ... 7:
+        display.print("TIME TO\nGO TO SCHOOL!");
+        break;
+      case 12 ... 13:
+        display.print("SHORT BREAK <3");
+        break;
+      case 17 ... 18:
+        display.print("WORK OUT\nPLAY PIANO");
+        break;
+      case 20 ... 21:
+        display.print("TIME TO STUDY\nYOUR AIM: AUSTRALIA!");
+        break;
+      case 22:
+        display.print("TURN OFF COMPUTER\nTIME TO READ BOOK!!!");
+        if (reminder_22 && t.first == 22 && t.second == 0) {
+          playBuzzer();
+          reminder_22 = false;
+        }
+        if (!reminder_22 && t.first == 22 && t.second == 1) {
+          reminder_22 = true;
+        }
+        break;
+      case 23 ... 24:
+        display.print("PREPARE TO SLEEP!");
+        break;
+      default:
+        display.print("YOUR FUTURE\nIN YOUR HANDS!");
+        break;
     }
   }
 
   if (counting) {
     startcounting();
   }
+  
+  if (wasting) {
+    startwasting();
+  }
 
-  myTime = millis()/1000;
-  if (isStart && myTime >= endTime) {
-    nextState();
+  if (isStart) {
+    myTime = millis()/1000;
+    if (myTime >= endTime) {
+      nextState();
+    }
   }
 
   if (isStart) {
@@ -200,7 +238,7 @@ void displayTime() {
   char buffer[5];
   sprintf(buffer, "%02d:%02d", minutes, seconds);
   display.setTextSize(2);
-  display.setCursor(display.width()/2, display.height()/2);
+  display.setCursor(128/2, 32/2); //display.width()
   display.print(buffer);
 }
 
@@ -210,9 +248,40 @@ void startcounting() {
     printDateTime(now); // Move this line here
     int currMillis_ALL = millis()/1000 - startMillis;
     display.setTextSize(2);
-    display.setCursor(0, display.height()/2);
+    display.setCursor(0, 32/2); //display.height()
     display.print(currMillis_ALL);
-    if (currMillis_ALL % 600 == 0) playBuzzer();
+    if (currMillis_ALL % 900 == 0) playBuzzer();
+  }
+}
+
+void startwasting() {
+  if (wasting) {
+    display.clearDisplay();
+    printDateTime(now); // Move this line here
+    int currMillis_ALL = (millis()/1000 - startMillis);
+    display.setTextSize(1);
+    display.setCursor(0, 32/2); //display.height()
+    display.println("YOU HAVE WASTED");
+    if (currMillis_ALL<120) {
+      display.print(currMillis_ALL);
+      display.print(" seconds");
+    } else {
+      display.print(currMillis_ALL/60);
+      display.print(" minutes");
+    }
+    if (currMillis_ALL % 300 == 0) {
+      turn_on_led(led_work, led_rest, led_plan);
+      playBuzzer();
+      turn_off_led();
+      playBuzzer();
+      turn_on_led(led_plan, led_rest, led_work);
+      playBuzzer();
+      turn_off_led();
+      playBuzzer();
+      turn_on_led(led_rest, led_work, led_plan);
+      playBuzzer();
+      turn_on_all_led();
+    }
   }
 }
 
@@ -220,6 +289,12 @@ void turn_on_led(int led_on, int led_off1, int led_off2) {
   digitalWrite(led_on, HIGH);
   digitalWrite(led_off1, LOW);
   digitalWrite(led_off2, LOW);
+}
+
+void turn_on_all_led() {
+  digitalWrite(led_work, HIGH);
+  digitalWrite(led_rest, HIGH);
+  digitalWrite(led_plan, HIGH);
 }
 
 void turn_off_led() {
@@ -239,6 +314,7 @@ void stop_pom() {
   if(!isStart) return;
   isStart = false;
   counting = false;
+  wasting = false;
   state = 'w';
   turn_off_led();
 }
@@ -290,10 +366,4 @@ void next() {
       ++session;
       break;
   }
-}
-
-void playBuzzer() {
-  tone(buzzerPin, 1140, 250);
-  delay(250*1.30);
-  noTone(buzzerPin);
 }
